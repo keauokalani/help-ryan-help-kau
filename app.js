@@ -1,6 +1,13 @@
 import {config} from './config.js';
 import {configured,request,node,renderMedia} from './api.js';
 const byId=id=>document.getElementById(id);
+const recoveryParams=new URLSearchParams(location.hash.slice(1));
+const recoveryToken=recoveryParams.get('access_token');
+if(recoveryParams.get('type')==='recovery'&&recoveryToken){
+  const panel=byId('password-recovery');panel.hidden=false;
+  const form=byId('password-recovery-form'),status=byId('password-recovery-status');
+  form.onsubmit=async e=>{e.preventDefault();const password=byId('recovery-password').value;if(password!==byId('recovery-confirm').value){status.textContent='The passwords do not match.';return;}const button=form.querySelector('button');button.disabled=true;status.textContent='Saving…';try{const response=await fetch(config.supabaseUrl+'/auth/v1/user',{method:'PUT',headers:{apikey:config.publishableKey,Authorization:'Bearer '+recoveryToken,'Content-Type':'application/json'},body:JSON.stringify({password})});if(!response.ok)throw new Error('This reset link is expired. Request a new one.');history.replaceState({},'',location.pathname+location.search);form.reset();status.textContent='Password updated. You can now use the Admin Login page.';}catch(err){status.textContent=err.message;}finally{button.disabled=false;}};
+}
 if(config.reviewMode)byId('share').hidden=true;
 const date=value=>new Intl.DateTimeFormat('en-US',{dateStyle:'long',timeZone:'Pacific/Honolulu'}).format(new Date(value+'T12:00:00-10:00'));
 byId('share').onclick=async()=>{const message=byId('share-status');if(config.reviewMode){message.textContent='Sharing is not available yet.';return;}try{if(navigator.share)await navigator.share({title:'Help Ryan Help Kaʻū',url:config.siteUrl});else{await navigator.clipboard.writeText(config.siteUrl);message.textContent='Website link copied.';}}catch(e){if(e.name!=='AbortError')message.textContent='Copy this website address to share: '+config.siteUrl;}};
