@@ -1,3 +1,7 @@
+const recoveryHash=new URLSearchParams(location.hash.slice(1));
+const recoveryToken=recoveryHash.get('access_token');
+const recoveryType=recoveryHash.get('type');
+import {config} from './config.js';
 import {configured,request,signIn,signOut,currentSession,node} from './api.js';
 import {compress,checkVideo} from './media.js';
 const el=id=>document.getElementById(id);let oldRecord=null,dirty=false;
@@ -11,6 +15,10 @@ el('media').onchange=()=>{el('video-fields').hidden=!videoSelected();el('transcr
 el('editor').oninput=()=>{dirty=true;};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 status(configured?'Log in to post photos and short videos.':'Admin login is awaiting secure account setup. Posting is disabled until connected.');
+if(configured&&recoveryToken&&recoveryType==='recovery'){
+  el('login-panel').hidden=true;el('reset-panel').hidden=false;status('Choose a new password.');
+  el('reset-form').onsubmit=async e=>{e.preventDefault();const password=el('new-password').value;if(password!==el('confirm-password').value){status('The passwords do not match.',true);return;}el('reset-button').disabled=true;try{const res=await fetch(config.supabaseUrl+'/auth/v1/user',{method:'PUT',headers:{apikey:config.publishableKey,Authorization:'Bearer '+recoveryToken,'Content-Type':'application/json'},body:JSON.stringify({password})});if(!res.ok)throw new Error('This reset link is expired. Request a new one.');history.replaceState({},'',location.pathname);el('reset-panel').hidden=true;el('login-panel').hidden=false;el('email').value='';status('Password updated. Log in with your new password.');}catch(err){status(err.message,true);}finally{el('reset-button').disabled=false;}};
+}
 el('login-button').disabled=!configured;
 el('login').onsubmit=async e=>{e.preventDefault();el('login-button').disabled=true;try{await signIn(el('email').value.trim(),el('password').value);el('password').value='';el('login-panel').hidden=true;el('editor-panel').hidden=false;document.querySelector('h1').textContent='Post an update';await load();status('Logged in. Choose a photo or short video to publish.');}catch(e){status(e.message,true);}finally{el('login-button').disabled=!configured;}};
 el('logout').onclick=async()=>{if(dirty&&!confirm('Leave this unsaved post?'))return;try{await signOut();}catch{}reset();el('editor-panel').hidden=true;el('login-panel').hidden=false;el('records').replaceChildren();document.querySelector('h1').textContent='Admin login';status('Logged out.');};
@@ -22,4 +30,5 @@ const row={kind:el('post-type').value,title,body:caption,caption:'',alt_text:cap
 const id=el('record-id').value;await request('/rest/v1/entries'+(id?'?id=eq.'+encodeURIComponent(id):''),{method:id?'PATCH':'POST',body:row});saved=true;reset();status('Published. Your post is now on the website.');try{await load();}catch{status('Published successfully. Reload to refresh the post list.');}
 }catch(e){if(uploaded&&!saved){try{await request('/storage/v1/object/project-media',{method:'DELETE',body:{prefixes:[uploaded]}});}catch{}}status(e.message,true);}finally{el('publish').disabled=false;}};
 async function load(){const records=await request('/rest/v1/entries?select=*&kind=in.(update,welcome)&order=created_at.desc');el('records').replaceChildren();if(!records.length)el('records').append(node('p','No posts yet.'));for(const r of records){const row=node('article',undefined,'admin-record');const text=node('div');text.append(node('strong',r.title),node('small',(r.kind==='welcome'?'Testimonial · ':'Progress blog · ')+(r.published?'Published':'Hidden')));const actions=node('div',undefined,'toolbar');const edit=node('button','Edit','button secondary');edit.onclick=()=>{if(dirty&&!confirm('Discard unsaved changes?'))return;reset();oldRecord=r;el('post-type').value=r.kind;setType();el('record-id').value=r.id;el('title').value=r.title;el('caption').value=r.body;el('transcript').value=r.transcript;el('existing-media').textContent='Photo/video saved. Choose a new file only to replace it.';el('media').onchange();el('title').focus();};actions.append(edit);if(r.published){const hide=node('button','Unpublish','button secondary');hide.onclick=async()=>{try{await request('/rest/v1/entries?id=eq.'+r.id,{method:'PATCH',body:{published:false}});await load();status('Post removed from public view.');}catch(e){status(e.message,true);}};actions.append(hide);}row.append(text,actions);el('records').append(row);}}
+
 
