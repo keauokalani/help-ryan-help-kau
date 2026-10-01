@@ -16,13 +16,15 @@ async function load(){
   if(!configured)return;
   try{
     const records=await request('/rest/v1/entries?select=*&published=eq.true&order=created_at.desc');
-    for(const kind of ['hero','story','work','about','welcome','interview','funding']){
+    for(const kind of ['hero','story','work','about','interview','funding']){
       const r=records.find(x=>x.kind===kind);if(!r)continue;
       if(byId(kind+'-title')&&r.title)byId(kind+'-title').textContent=r.title;
       if(byId(kind+'-body')){byId(kind+'-body').textContent=r.body;byId(kind+'-body').classList.add('pre-line');}
       if(['welcome','interview'].includes(kind)&&(r.media_path||r.video_url)){const box=byId(kind+'-media');const media=node('div',undefined,'media');await renderMedia(r,media);if(media.childElementCount){box.replaceWith(media);media.id=kind+'-media';if(kind==='welcome'){document.querySelector('.film-caption').lastElementChild.textContent='Welcome film';if(r.transcript){const d=node('details');d.append(node('summary','Welcome film transcript'),node('p',r.transcript,'pre-line'));media.append(d);}}}}
       if(kind==='interview'&&r.transcript)byId('transcript').textContent=r.transcript;
     }
+    const testimonials=records.filter(r=>r.kind==='welcome'&&/\.(mp4|webm)$/.test(r.media_path||''));
+    if(testimonials.length){const list=byId('testimonials-list');list.replaceChildren();for(const r of testimonials){const card=node('article',undefined,'post media');card.append(node('h3',r.title),node('p',r.body));try{await renderMedia(r,card);}catch{card.append(node('p','Video is temporarily unavailable.','caption'));}if(r.transcript){const d=node('details');d.append(node('summary','Read the testimonial'),node('p',r.transcript,'pre-line'));card.append(d);}list.append(card);}}
     const posts=records.filter(r=>['update','gallery'].includes(r.kind));
     if(posts.length){byId('updates').replaceChildren();for(const r of posts.slice(0,3))await addPost(r,byId('updates'));}
     const gallery=posts.filter(r=>r.media_path||r.video_url).slice(0,3);
